@@ -1,15 +1,13 @@
 import os
 import shutil
+import ssl
 import aiohttp
 import aiofiles
-import asyncio
-from deprecated.sphinx import deprecated
-from bs4 import BeautifulSoup, Tag
-from typing import Dict, Union
+from bs4 import BeautifulSoup, Tag # type: ignore
 from pydantic import BaseModel
 from enum import Enum
 from asyncio import Semaphore
-from collections import OrderedDict
+from deprecated import deprecated
 
 from custom_typing import NovelTitle, ChapterContent, ChapterRange, PartTitle, ChapterTitle
 
@@ -34,7 +32,12 @@ class Syosetu:
 
 
     async def async_init(self):
-        self.__session: aiohttp.ClientSession = aiohttp.ClientSession()
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        self.__session: aiohttp.ClientSession = aiohttp.ClientSession(connector=connector)
         self.__novel_info_soup = await self.__fetch_novel_info()
         self.novel_title = self.__get_novel_title()
         self.author = self.__get_novel_author()
@@ -56,11 +59,11 @@ class Syosetu:
             return BeautifulSoup(await response.text(), "html.parser")
         
     
-    async def __get_novel_parts(self) -> Dict[NovelTitle, ChapterRange]:
+    async def __get_novel_parts(self) -> dict[NovelTitle, ChapterRange]:
         """
         structure:
 
-        chapter:Dict[str,range] = {
+        chapter:dict[str,range] = {
             "第一部　断頭台の姫君":range(1,148),
             "第二部　導(しるべ)の少女":range(148,266),
             "第三部　月と星々の新たなる盟約":range(266,376),
@@ -73,17 +76,16 @@ class Syosetu:
         """
 
         chapters = {}
-        chapter_titles: Tag = self.__novel_info_soup.find_all('div', class_='chapter_title')
+        chapter_titles: Tag = self.__novel_info_soup.find_all('div', class_='p-eplist__chapter-title')
         for title in chapter_titles:
             chapter_title: Tag = title.get_text(strip=True)
             chapter_numbers = []
             next_element = title.find_next_sibling()
-            while next_element and next_element.name != 'div':
-                if next_element.name == 'dl' and 'novel_sublist2' in next_element.get('class', []):
-                    a_tag = next_element.find('a', href=True)
-                    if a_tag:
-                        chapter_number = int(a_tag['href'].split('/')[-2])
-                        chapter_numbers.append(chapter_number)
+            while next_element and next_element.name == 'div' and 'p-eplist__sublist' in next_element.get('class', []):
+                a_tag = next_element.find('a', href=True)
+                if a_tag:
+                    chapter_number = int(a_tag['href'].split('/')[-2])
+                    chapter_numbers.append(chapter_number)
                 next_element = next_element.find_next_sibling()
 
             if chapter_numbers:
@@ -92,7 +94,7 @@ class Syosetu:
     
 
     @deprecated(version='0.1.0', reason="Feeling bad, so use __get_novel_parts instead")
-    async def __get_novel_parts2(self) -> Dict[NovelTitle, ChapterRange]:
+    async def __get_novel_parts2(self) -> dict[NovelTitle, ChapterRange]:
         parts = {}
         start = 1
         current_title = None
@@ -116,7 +118,7 @@ class Syosetu:
 
 
     def __get_novel_title(self) -> NovelTitle:
-        return self.__novel_info_soup.find("p", class_="novel_title").text
+        return self.__novel_info_soup.find("h1", class_="p-novel__title").text
 
 
     def __get_novel_author(self)-> str:
@@ -128,14 +130,14 @@ class Syosetu:
         return range(1, len(chapters) + 1)
 
 
-    async def __get_chapter_title_content(self, chapter: int) -> (ChapterTitle, ChapterContent):
+    async def __get_chapter_title_content(self, chapter: int) -> tuple[ChapterTitle, ChapterContent]:
         soup:BeautifulSoup = await self.__fetch_chapters_info(chapter)
-        title = soup.find("p", class_="novel_subtitle").text.replace("\u3000", " ")
-        content = soup.find("div", id="novel_honbun").text.replace("\u3000", "")
+        title = soup.find("h1", class_="p-novel__title").text.replace("\u3000", " ")
+        content = soup.find("div", class_="p-novel__body").text.replace("\u3000", "")
         return title, content
     
 
-    async def __async_save_txt(self, title: Union[ChapterTitle,PartTitle], content: ChapterContent, chapter_index, file_path:str) -> None:
+    async def __async_save_txt(self, title: ChapterTitle | PartTitle, content: ChapterContent, chapter_index, file_path:str) -> None:
         async with aiofiles.open(f"{file_path}.txt", "a+", encoding="utf-8") as f:
             if self.record_chapter_index:
                 await f.write(f"● {title} [総第{chapter_index}話]\n")
@@ -158,8 +160,8 @@ class Syosetu:
         print(output_dir)
         if os.path.exists(output_dir): 
             shutil.rmtree(output_dir)
-        os.mkdir(output_dir)
-        parts: Dict[PartTitle, ChapterRange] = await self.__get_novel_parts()
+        os.makedirs(output_dir, exist_ok=True)
+        parts: dict[PartTitle, ChapterRange] = await self.__get_novel_parts()
         print((len(parts) == 0) and "No part\n" or f"All parts:\n{"\n".join(list(parts.keys()))}\n")
 
         if(len(parts)!=0): # novel has parts
@@ -192,8 +194,8 @@ class Syosetu:
     
 
 class SaveFormat(Enum):
-    TXT: str = "txt"
-    EPUB: str = "epub"
+    TXT  = "txt"
+    EPUB = "epub"
 
 
 class SyosuteArgs(BaseModel):

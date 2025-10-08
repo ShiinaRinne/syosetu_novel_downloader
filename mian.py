@@ -9,7 +9,7 @@ def parse_args() -> SyosuteArgs:
     parser.add_argument("--novel_id", default="", help="Novel id", required=True)
     parser.add_argument("--save-format", default="txt", help="Save format, now support txt and epub(experimental), default is txt")
     parser.add_argument("--proxy", default="", help="Proxy")
-    parser.add_argument("--output-dir", default="./", help="Output directory")
+    parser.add_argument("--output-dir", default="./downloads", help="Output directory")
     parser.add_argument("--record-chapter-number", default=False, help="Record Chapter Number, like [総第xxx話]")
     return parser.parse_args()
 
@@ -51,5 +51,6 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (ConnectionResetError, aiohttp.ServerDisconnectedError, aiohttp.ClientConnectorError) as e:
-        print(e.__traceback__)
+        import traceback
+        print(traceback.format_exc())
         print("check your network or proxy")

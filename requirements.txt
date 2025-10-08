@@ -3,3 +3,4 @@ aiohttp==3.9.0
 beautifulsoup4==4.12.2
 EbookLib==0.18
 pydantic==2.5.1
+deprecated==1.2.18

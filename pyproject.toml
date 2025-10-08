@@ -1,0 +1,14 @@
+[project]
+name = "syosetu-novel-downloader"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiofiles==23.2.1",
+    "aiohttp==3.9.0",
+    "beautifulsoup4==4.12.2",
+    "deprecated>=1.2.18",
+    "ebooklib==0.18",
+    "pydantic==2.5.1",
+]
